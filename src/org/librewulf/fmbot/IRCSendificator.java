@@ -14,24 +14,24 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class IRCSendificator implements Runnable {
 
-    /**
+    /*
      * The queue that will hold our messages.
      */
     // TODO: Consider switching to Deque
     private ConcurrentLinkedQueue<String> messageQueue;
 
-    /**
+    /*
      * The PrintWriter we use to send to the server. THIS SHOULD NOT BE
      * TOUCHED OUTSIDE OF SYNCHRONIZED METHODS.
      */
     private PrintWriter printWriter;
 
-    /**
+    /*
      * The time the last message (subject to rate limiting) was sent.
      */
     private long lastSent;
 
-    /**
+    /*
      * Private internal methods
      */
 
@@ -53,7 +53,7 @@ public class IRCSendificator implements Runnable {
         this.messageQueue = new ConcurrentLinkedQueue<>();
     }
 
-    /**
+    /*
      * Overidden methods from other classes.
      */
 
@@ -68,9 +68,16 @@ public class IRCSendificator implements Runnable {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        //TODO: Write actual code here
-        return false;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        IRCSendificator that = (IRCSendificator) o;
+
+        if (lastSent != that.lastSent) return false;
+        if (!messageQueue.equals(that.messageQueue)) return false;
+
+        return true;
     }
 
     @Override
@@ -97,7 +104,7 @@ public class IRCSendificator implements Runnable {
                             System.out.println("Caught an interrupt, " +
                                     "suspending message sending!");
 
-                            /**
+                            /*
                              * At this point our message is no longer in the
                              * queue, but we never got a chance to send it.
                              * We can't send it now or it might cause a
@@ -129,10 +136,15 @@ public class IRCSendificator implements Runnable {
         }
     }
 
-    /**
+    /*
      * Constructor and public methods
      */
 
+    /**
+     * Default Constructor
+     *
+     * @param out the output stream the messages should be written to
+     */
     public IRCSendificator(OutputStream out) {
         this.printWriter = new PrintWriter(out);
         this.createNewRep();
@@ -152,7 +164,7 @@ public class IRCSendificator implements Runnable {
      * @param msg A message to be sent to the server. If the string contians
      *            multiple lines, each line will be queued individually.
      */
-    public synchronized void queueRaw(String msg) {
+    public void queueRaw(String msg) {
         String[] strArr = msg.split("\n");
 
         for (String line : strArr) {

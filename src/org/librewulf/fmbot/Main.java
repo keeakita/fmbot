@@ -1,11 +1,10 @@
 package org.librewulf.fmbot;
 
+import javax.net.SocketFactory;
+import javax.net.ssl.SSLSocketFactory;
 import java.io.*;
 import java.net.Socket;
 import java.util.Properties;
-
-import javax.net.SocketFactory;
-import javax.net.ssl.SSLSocketFactory;
 
 public class Main {
 
@@ -50,6 +49,10 @@ public class Main {
 
             (new Thread(sendificator)).start();
 
+            // Instantiate our poller
+            DataPoller poller = new DataPoller(sendificator, config.getProperty("apikey"));
+            poller.loadFromFile();
+
             // Tell the server about us
             sendificator.sendNow("NICK " + config.getProperty("nick"));
             sendificator.sendNow("USER " + config.getProperty("nick") + " +iw * :" + config.getProperty("realname"));
@@ -65,13 +68,57 @@ public class Main {
 
                     // Connect once MOTD is over
                     if (m.getCommand().equals("376")) {
-                        onReadyForCommands(sendificator);
+                        onReadyForCommands(sendificator, poller);
                     }
 
+                    // TODO: Move commands to modules
+                    // TODO: Commands to stop/start/restart non-critical threads
                     // beep
                     if (m.getCommand().equals("PRIVMSG") && m.getContent().startsWith("|beep")) {
                         reply(sendificator, m, "Beep boop.");
                     }
+
+                    // Add an fm user
+                    if (m.getCommand().equals("PRIVMSG") && m.getContent().startsWith("|fmadd")) {
+                        String[] cmdArr = m.getContent().split(" ");
+                        // |fmadd user domain
+                        if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                                FMUser.domainRegex) && m.getDestination().startsWith("#")) {
+
+                            poller.add(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0],
+                                    m.getDestination()));
+
+                        // |fmadd user domain channel
+                        // TODO: Check if bot is in channel before letting somebody register for it
+                        } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                                FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
+
+                            poller.add(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0], cmdArr[3]));
+                        } else {
+                            reply(sendificator, m, "Usage: |fmadd user domain (channel)");
+                        }
+                    }
+
+                    // Delete an fm user
+                    if (m.getCommand().equals("PRIVMSG") && m.getContent().startsWith("|fmdel")) {
+                        String[] cmdArr = m.getContent().split(" ");
+                        // |fmdel user domain
+                        if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                                FMUser.domainRegex) && m.getDestination().startsWith("#")) {
+
+                            poller.remove(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0],
+                                    m.getDestination()));
+
+                            // |fmadd user domain channel
+                        } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                                FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
+
+                            poller.remove(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0], cmdArr[3]));
+                        } else {
+                            reply(sendificator, m, "Usage: |fmdel user domain (channel)");
+                        }
+                    }
+
                 }
             }
         } catch (IOException e) {
@@ -80,7 +127,8 @@ public class Main {
         }
     }
 
-    public static void onReadyForCommands(IRCSendificator sendificator) {
+    // TODO: Make this a method for modules
+    public static void onReadyForCommands(IRCSendificator sendificator, DataPoller poller) {
         // Register with NickServ
         if (config.containsKey("nickserv_pass")) {
             sendificator.queuePrivmsg("NickServ", "identify " + config.getProperty("nickserv_pass"));
@@ -91,6 +139,9 @@ public class Main {
             sendificator.queueCommand("JOIN", channel);
             sendificator.queuePrivmsg(channel, config.getProperty("nick") + " reporting for duty!");
         }
+
+        // Start our polling
+        (new Thread(poller)).start();
     }
 
     public static void reply(IRCSendificator sendificator, Message source, String reply) {
