@@ -1,13 +1,13 @@
 fmbot
 =====
 
-An IRC bot for announcing what people are playing via Last.fm, Libre.fm, or any other GNUfm server.
+An modular IRC bot for announcing what people are playing via Last.fm, Libre.fm, or any other GNUfm server.
 
 Status
 ------
-Last.fm/GNU FM functionality is present, and users can add and remove themselves from the poll list. More functionality
-for user management is planned, with more complex things pending a rewrite and organization of the commands into a
-module based architecture.
+This is very much an alpha. It's not yet "stable", but should be working enough for others to play around with.
+Please keep in mind if you write plugins that the plugin architecture could change at any time,
+and probably will this early in development.
 
 A note about versions
 ---------------------
@@ -20,10 +20,10 @@ See the LICENSE file for details. It's MIT.
 
 TODO
 ----
-- Create a modular framework and break commands into modules
-- Add more methods to the DataPoller for enhanced search/removal commands
-- Implement lots of unimplemented stuff in the config file
-  - Joining multiple channels
-  - Reading admins list into an array
-  - Considering ignore list for commands
-- Add some functionality to stop/restart/reload non-critical threads via admin commands
+- Migrate to a maven project
+- Catch exceptions thrown by plugins, so that no single plugin can crash the main thread
+- Documentation is badly needed
+- Refactor stuff out of Main so that it can tested by giving dummy inputs and outputs
+  - Write said tests
+- More plugins! A Java REPL plugin is planned, Software I and II students should appreciate this
+- Investigate letting users write plugins in other languages capable of running on the JVM (JRuby, Jython, Clojure, ...)

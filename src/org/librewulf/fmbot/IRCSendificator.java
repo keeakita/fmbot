@@ -6,9 +6,9 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * This class is responsible for reading messages from a thread safe queue, then
- * sending them out to the IRC server in a way that won't get us kicked for
- * flooding.
+ * A non-blocking implementation of IRCSendificator. This implementation stores messages in a thread safe queue, using a
+ * separate thread to send messages from the queue in a way that should prevent disconnects due to server flooding.
+ * No method in this class will block waiting for the flood cooldown.
  *
  * @author William Osler
  */
@@ -17,7 +17,6 @@ public class IRCSendificator implements Runnable {
     /*
      * The queue that will hold our messages.
      */
-    // TODO: Consider switching to Deque
     private ConcurrentLinkedQueue<String> messageQueue;
 
     /*
@@ -44,13 +43,6 @@ public class IRCSendificator implements Runnable {
         this.printWriter.print(msg + "\r\n");
         this.printWriter.flush();
         System.out.println("Sent: " + msg.trim());
-    }
-
-    /**
-     * Creates new instances of our queue.
-     */
-    private void createNewRep() {
-        this.messageQueue = new ConcurrentLinkedQueue<>();
     }
 
     /*
@@ -83,7 +75,7 @@ public class IRCSendificator implements Runnable {
     @Override
     public void run() {
         while (true) {
-            // Check to see if we have a message to work with
+            // Check to see if we have a message to work with.start();
             try {
                 String message = this.messageQueue.remove();
 
@@ -105,11 +97,9 @@ public class IRCSendificator implements Runnable {
                                     "suspending message sending!");
 
                             /*
-                             * At this point our message is no longer in the
-                             * queue, but we never got a chance to send it.
-                             * We can't send it now or it might cause a
-                             * flood, so we just have to stick it back at the
-                             * end of the queue and let it be out of order.
+                             * At this point our message is no longer in the queue, but we never got a chance to send
+                             * it. We can't send it now or it might cause a flood, so we just have to stick it back at
+                             * the end of the queue and let it be out of order.
                              */
                             this.messageQueue.add(message);
 
@@ -127,8 +117,7 @@ public class IRCSendificator implements Runnable {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException ie) {
-                    System.out.println("Caught an interrupt, " +
-                            "suspending message sending!");
+                    System.out.println("Caught an interrupt, suspending message sending!");
 
                     return;
                 }
@@ -147,15 +136,19 @@ public class IRCSendificator implements Runnable {
      */
     public IRCSendificator(OutputStream out) {
         this.printWriter = new PrintWriter(out);
-        this.createNewRep();
+        this.messageQueue = new ConcurrentLinkedQueue<>();
         this.lastSent = 0;
+
+        // Start the sending thread
+        // TODO: we now can't restart the thread from the outside, consider an alternative
+        (new Thread(this)).start();
     }
 
     /**
      * Clears the list of messages waiting to be sent.
      */
     public void clear() {
-        this.createNewRep();
+        this.messageQueue.clear();
     }
 
     /**

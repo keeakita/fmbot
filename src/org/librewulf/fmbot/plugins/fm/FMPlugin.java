@@ -1,5 +1,8 @@
-package org.librewulf.fmbot;
+package org.librewulf.fmbot.plugins.fm;
 
+import org.librewulf.fmbot.IRCSendificator;
+import org.librewulf.fmbot.Message;
+import org.librewulf.fmbot.plugins.Plugin;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
 
@@ -14,12 +17,12 @@ import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * DataPoller polls the API (or APIs) of sites we need to fetch data from. In this case, Last.fm, Libre.fm,
+ * This plugin polls the API (or APIs) of sites we need to fetch data from. In this case, Last.fm, Libre.fm,
  * or any user defined GNU FM site. It contains a collection of users, backed by a file for persistence.
  *
  * @author William Osler
  */
-public class DataPoller implements Runnable {
+public class FMPlugin extends Plugin {
 
     /*
      * ConcurrentLinkedDeque to hold our entries. This is used since it allows us to circle around easily making
@@ -40,7 +43,7 @@ public class DataPoller implements Runnable {
     /*
      * The sendificator for queueing messages
      */
-    private IRCSendificator sendificator;
+    private IRCSendificator sendificator = null;
 
     /*
      * Private methods
@@ -67,6 +70,66 @@ public class DataPoller implements Runnable {
         }
     }
 
+    /**
+     * Add a user to the deque, and to the file.
+     *
+     * @param user The user to be added to the polling deque.
+     */
+    private void add(FMUser user) {
+        // Put them at the front so they get processed on next poll, gives more immediate feedback to the user
+        users.addFirst(user);
+
+        // Instead of wasting time flushing the whole thing to a file, let's just append this one line
+        try {
+            PrintWriter fileOut = new PrintWriter(new FileOutputStream(new File(fileName), true));
+            fileOut.println(user.toFileString());
+            fileOut.close();
+        } catch (FileNotFoundException eNotFound) {
+            // We can't append to a non existent file, so let's do a full write
+            this.writeToFile();
+        }
+    }
+
+    /**
+     * Add a user to the deque, and to the file.
+     *
+     * @param user The user to be added to the polling deque.
+     */
+    private void remove(FMUser user) {
+        // Remove the user
+        users.remove(user);
+
+        // Unlike add we can't quickly just remove one line, so we re-save the file
+        this.writeToFile();
+    }
+
+    /**
+     * Loads user data from a comma separated file, clearing the user object and creating a new file if no file is
+     * found.
+     */
+    private void loadFromFile() {
+        Scanner fileIn = null;
+
+        // We synchronize here because there's a case a user has been removed from the queue to be worked on,
+        // but not re-added yet
+        synchronized (users) {
+            users.clear();
+        }
+
+        try {
+            fileIn = new Scanner(new File(fileName));
+        } catch (FileNotFoundException e) {
+            System.out.println("Warning: FM users file not found. Creating a blank one.");
+            this.writeToFile();
+        }
+
+        synchronized (users) {
+            while (fileIn.hasNextLine()) {
+                users.add(new FMUser(fileIn.nextLine()));
+            }
+        }
+    }
+
     /*
      * Overridden methods
      */
@@ -75,7 +138,9 @@ public class DataPoller implements Runnable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        DataPoller that = (DataPoller) o;
+        if (!super.equals(o)) return false;
+
+        FMPlugin that = (FMPlugin) o;
 
         if (!APIKey.equals(that.APIKey)) return false;
         if (!users.equals(that.users)) return false;
@@ -90,8 +155,9 @@ public class DataPoller implements Runnable {
 
     @Override
     public void run() {
-        while (true) {
-            if (!users.isEmpty()) {
+        while (this.isEnabled()) {
+            // Wait until we have a user and a valid way to send it
+            if (!users.isEmpty() && sendificator != null) {
                 // Take one user off the list and check the API
                 FMUser user;
 
@@ -116,6 +182,12 @@ public class DataPoller implements Runnable {
                                 user.toString());
                         proceed = false;
                     }
+                }
+
+                if (!state.inChannel(user.getChannel())) {
+                    System.err.println("Error: User " + user + " will not be checked for updates, " +
+                            "since we aren't in that channel.");
+                    proceed = false;
                 }
 
                 if (proceed) {
@@ -202,7 +274,6 @@ public class DataPoller implements Runnable {
                          * thread and restart it later, using the cached listening data to prevent from repeating a
                          * listen announcement.
                          */
-                        //TODO: Figure out if this is a good idea
                         this.writeToFile();
                     }
                 }
@@ -217,81 +288,100 @@ public class DataPoller implements Runnable {
         }
     }
 
-    /*
-     * Constructor
-     */
+    @Override
+    public void onInitialize() {
+        this.APIKey = state.getConfig().getProperty("apikey");
+    }
 
-    /**
-     * Default constructor.
-     *
-     * @param sendificator the IRCSendificator for queueing messages
-     * @param APIKey the Last.fm API key
-     */
-    public DataPoller(IRCSendificator sendificator, String APIKey) {
+    @Override
+    public void onEndOfMOTD(IRCSendificator sendificator, Message motdEnd) {
         this.sendificator = sendificator;
-        this.APIKey = APIKey;
     }
 
-    /*
-     * Public methods
-     */
+    @Override
+    public void onPrivmsg(IRCSendificator sendificator, Message message) {
+        // Add an fm user
+        if (message.getContent().startsWith("|fmadd ")) {
+            String[] cmdArr = message.getContent().split(" ");
+            // |fmadd user domain
+            if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                    FMUser.domainRegex) && message.getDestination().startsWith("#")) {
 
-    /**
-     * Add a user to the deque, and to the file.
-     *
-     * @param user The user to be added to the polling deque.
-     */
-    public void add(FMUser user) {
-        // Put them at the front so they get processed on next poll, gives more immediate feedback to the user
-        users.addFirst(user);
+                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0],
+                        message.getDestination());
 
-        // Instead of wasting time flushing the whole thing to a file, let's just append this one line
-        try {
-            PrintWriter fileOut = new PrintWriter(new FileOutputStream(new File(fileName), true));
-            fileOut.println(user.toFileString());
-            fileOut.close();
-        } catch (FileNotFoundException eNotFound) {
-            // We can't append to a non existent file, so let's do a full write
-            this.writeToFile();
-        }
-    }
+                if (!users.contains(user)) {
+                    this.add(user);
+                    reply(message, sendificator, String.format("Now tracking %s@%s in this channel as %s",
+                            user.getUsername(), user.getDomain(), user.getNick()));
+                    reply(message, sendificator, String.format("To stop monitoring, type \"|fmdel %s %s\"",
+                            user.getUsername(), user.getDomain()));
+                } else {
+                    reply(message, sendificator, "User already exists.");
+                }
 
-    /**
-     * Add a user to the deque, and to the file.
-     *
-     * @param user The user to be added to the polling deque.
-     */
-    public void remove(FMUser user) {
-        // Remove the user
-        users.remove(user);
+            // |fmadd user domain channel
+            } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                    FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
 
-        // Unlike add we can't quickly just remove one line, so we re-save the file
-        this.writeToFile();
-    }
+                // Make sure the bot is in a channel before letting somebody register with it
+                if (state.inChannel(cmdArr[3])) {
+                    FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0], cmdArr[3]);
 
-    /**
-     * Loads user data from a comma separated file, clearing the user object and creating a new file if no file is found.
-     */
-    public void loadFromFile() {
-        Scanner fileIn = null;
+                    if (!users.contains(user)) {
+                        this.add(user);
+                        reply(message, sendificator, String.format("Now tracking %s@%s in %s as %s", user.getUsername(),
+                                user.getDomain(), user.getChannel(), user.getNick()));
+                        reply(message, sendificator, String.format("To stop monitoring, type \"|fmdel %s %s %s\"",
+                                user.getUsername(), user.getDomain(), user.getChannel()));
+                    } else {
+                        reply(message, sendificator, "User already exists.");
+                    }
+                } else {
+                    reply(message, sendificator, "You can't register to " + cmdArr[3] +  ", I'm not in that channel!");
+                }
+            } else {
+                reply(message, sendificator, "Usage: |fmadd user domain (channel)");
+            }
+        // Remove an fm user
+        } else if (message.getContent().startsWith("|fmdel ")) {
+            String[] cmdArr = message.getContent().split(" ");
+            // |fmdel user domain
+            if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                    FMUser.domainRegex) && message.getDestination().startsWith("#")) {
 
-        // No need to synchronize here, since we don't care what's in it
-        users.clear();
+                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0],
+                        message.getDestination());
 
-        try {
-            fileIn = new Scanner(new File(fileName));
-        } catch (FileNotFoundException e) {
-            System.out.println("Warning: FM users file not found. Creating a blank one.");
-            this.writeToFile();
-        }
+                if (users.contains(user)) {
+                    this.remove(user);
+                    reply(message, sendificator, String.format("No longer monitoring %s@%s in this channel.",
+                            user.getUsername(), user.getDomain()));
+                } else {
+                    reply(message, sendificator, "No such user found.");
+                }
 
-        synchronized (users) {
-            // Clear the users object
-            while (fileIn.hasNextLine()) {
-                users.add(new FMUser(fileIn.nextLine()));
+            // |fmdel user domain channel
+            } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
+                    FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
+
+                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0], cmdArr[3]);
+
+                if (this.users.contains(user)) {
+                    this.remove(user);
+                    reply(message, sendificator, String.format("No longer monitoring %s@%s in %s.", user.getUsername(),
+                            user.getDomain(), user.getChannel()));
+                } else {
+                    reply(message, sendificator, "No such user found.");
+                }
+            } else {
+                reply(message, sendificator, "Usage: |fmdel user domain (channel)");
             }
         }
     }
 
-    //TODO: contains method and find by field methods
+    @Override
+    public void onEnable() {
+        loadFromFile();
+    }
 }

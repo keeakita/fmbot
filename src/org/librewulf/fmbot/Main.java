@@ -1,9 +1,12 @@
 package org.librewulf.fmbot;
 
+import org.librewulf.fmbot.plugins.Plugin;
+
 import javax.net.SocketFactory;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.*;
 import java.net.Socket;
+import java.util.HashMap;
 import java.util.Properties;
 
 public class Main {
@@ -15,7 +18,6 @@ public class Main {
      */
     public static void main(String[] args) {
         // Read our config file
-
         try {
             FileReader configFile = new FileReader("data/config.properties");
             config = new Properties();
@@ -26,6 +28,43 @@ public class Main {
         } catch (IOException e) {
             System.err.println("Unknown IOException while opening config file: " + e.getMessage());
             System.exit(500);
+        }
+
+        // Load plugins
+        ClassLoader loader = ClassLoader.getSystemClassLoader();
+        String[] pluginNames = config.getProperty("plugins").split(",");
+        // A map containing Plugin instances by name
+        HashMap<String, Plugin> plugins = new HashMap<>();
+
+        for (String pluginName : pluginNames) {
+            try {
+                Class plugin = loader.loadClass(pluginName);
+                plugins.put(pluginName, (Plugin) plugin.newInstance());
+            } catch (ClassNotFoundException eNoClass) {
+                System.err.println("Plugin " + pluginName + " not found, check that it exists and is in the " +
+                        "CLASSPATH.");
+            } catch (IllegalAccessException eIllegalAccess) {
+                System.err.println("IllegalAccessException instantiating " + pluginName + ", make sure the "
+                        + "constructor is accessible.");
+            } catch (InstantiationException eInstance) {
+                System.err.println("Error instantiating " + pluginName + ", is there a zero argument constructor?");
+            }
+        }
+
+        // Initialize state
+        BotState state = new BotState(config, plugins);
+        for (Plugin p : plugins.values()) {
+            p.initState(state);
+        }
+
+        // Load ignored nicks string into array
+        String[] ignoreNicks = config.getProperty("ignore").split(",");
+
+
+        // All plugins have been loaded, run the initialize methods and start threads
+        for (Plugin p : plugins.values()) {
+            p.onInitialize();
+            p.setEnabled(true);
         }
 
         // Create a socket
@@ -44,116 +83,137 @@ public class Main {
 
             BufferedReader in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
 
+            // We should be connected now
+            state.setConnected(true);
+
             // Instantiate our Sendificator
             IRCSendificator sendificator = new IRCSendificator(sock.getOutputStream());
 
-            (new Thread(sendificator)).start();
-
-            // Instantiate our poller
-            DataPoller poller = new DataPoller(sendificator, config.getProperty("apikey"));
-            poller.loadFromFile();
+            // onConnect
+            for (Plugin p : plugins.values()) {
+                if (p.isEnabled()) {
+                    p.onConnect(sendificator);
+                }
+            }
 
             // Tell the server about us
-            sendificator.sendNow("NICK " + config.getProperty("nick"));
-            sendificator.sendNow("USER " + config.getProperty("nick") + " +iw * :" + config.getProperty("realname"));
+            String[] nicks = config.getProperty("nick").split(",");
+            int nickTries = 1;
+            sendificator.sendNow("NICK " + nicks[0]);
+            sendificator.sendNow("USER " + nicks[0] + " +iw * :" + config.getProperty("realname"));
+            state.setNick(nicks[0]);
 
             String line;
             while ((line = in.readLine()) != null) {
                 System.out.println(line);
+
+                // onRawMessage
+                for (Plugin p : plugins.values()) {
+                    if (p.isEnabled()) {
+                        p.onRawMessage(sendificator, line);
+                    }
+                }
+
                 // Handle the PING
                 if (line.indexOf("PING") == 0) {
                     sendificator.pong(line.split(" ")[1]);
                 } else {
+                    // TODO: Make sure it can be put in a message then onIRCMessage
                     Message m = new Message(line);
+
+                    // 443 means we can't use this nick, attempt to fall back
+                    if (m.getCommand().equals("433")) {
+                        if (nickTries < nicks.length) {
+                            System.err.println(String.format("Nick %s is already taken, falling back to backup %s",
+                                    nicks[nickTries - 1], nicks[nickTries]));
+
+                            sendificator.sendNow("NICK " + nicks[nickTries]);
+                            state.setNick(nicks[nickTries]);
+                            nickTries++;
+                        } else {
+                            // Abort, we have no more nicks to try
+                            System.err.println("All specified nicks are taken. Aborting.");
+                            sendificator.sendNow("QUIT :Out of nicknames");
+                        }
+                    }
 
                     // Connect once MOTD is over
                     if (m.getCommand().equals("376")) {
-                        onReadyForCommands(sendificator, poller);
-                    }
+                        // Register with NickServ
+                        if (config.containsKey("nickserv_pass")) {
+                            sendificator.queuePrivmsg("NickServ", "identify " + config.getProperty("nickserv_pass"));
+                        }
 
-                    // TODO: Move commands to modules
-                    // TODO: Commands to stop/start/restart non-critical threads
-                    // beep
-                    if (m.getCommand().equals("PRIVMSG") && m.getContent().startsWith("|beep")) {
-                        reply(sendificator, m, "Beep boop.");
-                    }
+                        String[] channels = config.getProperty("channels").split(",");
+                        for (String channel : channels) {
+                            sendificator.queueCommand("JOIN", channel);
+                            sendificator.queuePrivmsg(channel, state.getNick() + " reporting for duty!");
+                        }
 
-                    // Add an fm user
-                    if (m.getCommand().equals("PRIVMSG") && m.getContent().startsWith("|fmadd")) {
-                        String[] cmdArr = m.getContent().split(" ");
-                        // |fmadd user domain
-                        if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
-                                FMUser.domainRegex) && m.getDestination().startsWith("#")) {
+                        // onEndOfMOTD
+                        for (Plugin p : plugins.values()) {
+                            if (p.isEnabled()) {
+                                p.onEndOfMOTD(sendificator, m);
+                            }
+                        }
+                    } else if (m.getCommand().equals("PRIVMSG")) {
+                        // Should we ignore this request?
+                        String senderNick = m.getSource().split("!")[0];
 
-                            poller.add(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0],
-                                    m.getDestination()));
+                        boolean ignore = false;
+                        for (String nick : ignoreNicks) {
+                            if (senderNick.equals(nick)) {
+                                ignore = true;
+                            }
+                        }
 
-                        // |fmadd user domain channel
-                        // TODO: Check if bot is in channel before letting somebody register for it
-                        } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
-                                FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
+                        if (!ignore) {
+                            // onPrivmsg
+                            for (Plugin p : plugins.values()) {
+                                if (p.isEnabled()) {
+                                    p.onPrivmsg(sendificator, m);
+                                }
+                            }
+                        }
+                    } else if (m.getCommand().equals("JOIN")) {
+                        // Was it the bot that joined?
+                        if (m.getSource().split("!")[0].equals(state.getNick())) {
+                            state.addChannel(m.getDestination());
+                        }
 
-                            poller.add(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0], cmdArr[3]));
-                        } else {
-                            reply(sendificator, m, "Usage: |fmadd user domain (channel)");
+                        for (Plugin p : plugins.values()) {
+                            p.onUserJoin(sendificator, m);
+                        }
+                    } else if (m.getCommand().equals("PART")) {
+                        // Was it the bot that left?
+                        if (m.getSource().split("!")[0].equals(state.getNick())) {
+                            state.removeChannel(m.getDestination());
+                        }
+
+                        for (Plugin p : plugins.values()) {
+                            p.onUserLeave(sendificator, m);
+                        }
+                    } else if ( m.getCommand().equals("QUIT")) {
+                        // Was it the bot that quit?
+                        if (m.getSource().split("!")[0].equals(state.getNick())) {
+                            state.setConnected(false);
+                            // We're disconnected, disable our plugins so they have a chance to clean up
+                            for (Plugin p : plugins.values()) {
+                                p.setEnabled(false);
+                            }
+
+                            System.exit(0);
+                        }
+
+                        for (Plugin p : plugins.values()) {
+                            p.onUserLeave(sendificator, m);
                         }
                     }
-
-                    // Delete an fm user
-                    if (m.getCommand().equals("PRIVMSG") && m.getContent().startsWith("|fmdel")) {
-                        String[] cmdArr = m.getContent().split(" ");
-                        // |fmdel user domain
-                        if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
-                                FMUser.domainRegex) && m.getDestination().startsWith("#")) {
-
-                            poller.remove(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0],
-                                    m.getDestination()));
-
-                            // |fmadd user domain channel
-                        } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
-                                FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
-
-                            poller.remove(new FMUser(cmdArr[1], cmdArr[2], m.getSource().split("!")[0], cmdArr[3]));
-                        } else {
-                            reply(sendificator, m, "Usage: |fmdel user domain (channel)");
-                        }
-                    }
-
                 }
             }
         } catch (IOException e) {
             System.err.println("Unknown IOException while using socket: " + e);
             System.exit(500);
-        }
-    }
-
-    // TODO: Make this a method for modules
-    public static void onReadyForCommands(IRCSendificator sendificator, DataPoller poller) {
-        // Register with NickServ
-        if (config.containsKey("nickserv_pass")) {
-            sendificator.queuePrivmsg("NickServ", "identify " + config.getProperty("nickserv_pass"));
-        }
-
-        String[] channels = config.getProperty("channels").split(",");
-        for (String channel : channels) {
-            sendificator.queueCommand("JOIN", channel);
-            sendificator.queuePrivmsg(channel, config.getProperty("nick") + " reporting for duty!");
-        }
-
-        // Start our polling
-        (new Thread(poller)).start();
-    }
-
-    public static void reply(IRCSendificator sendificator, Message source, String reply) {
-        assert source.getCommand().equals("PRIVMSG");
-
-        if (source.getDestination().startsWith("#")) {
-            // It's a channel
-            sendificator.queuePrivmsg(source.getDestination(), reply);
-        } else {
-            // It's a user
-            String user = source.getSource().split("!")[0];
-            sendificator.queuePrivmsg(user, reply);
         }
     }
 }

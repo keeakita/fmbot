@@ -1,4 +1,4 @@
-package org.librewulf.fmbot;
+package org.librewulf.fmbot.plugins.fm;
 
 /**
  * An object modelling a user of a *.fm service (last.fm, libre.fm etc).
@@ -77,7 +77,7 @@ public class FMUser {
      * @param domain The domain name where the account can be found
      * @param channel
      */
-    FMUser (String username, String domain, String nick, String channel) {
+    public FMUser (String username, String domain, String nick, String channel) {
         this.username = username;
 
         if (domain.equals("last.fm")) {
@@ -96,7 +96,7 @@ public class FMUser {
      * @param data A comma separated string containing the username, domain, channel, nick,
      *             and (optional) last listen (in that order).
      */
-    FMUser (String data) {
+    public FMUser (String data) {
         String[] strArr = data.split(",");
 
         this.username = strArr[0];
