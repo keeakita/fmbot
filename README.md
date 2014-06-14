@@ -1,18 +1,34 @@
 fmbot
 =====
 
-An modular IRC bot for announcing what people are playing via Last.fm, Libre.fm, or any other GNUfm server.
+A modular IRC bot for announcing what people are playing via Last.fm, Libre.fm,
+or any other GNUfm server.
 
 Status
 ------
-This is very much an alpha. It's not yet "stable", but should be working enough for others to play around with.
-Please keep in mind if you write plugins that the plugin architecture could change at any time,
-and probably will this early in development.
+This is very much an alpha. It's not yet "stable", but should be working enough
+for others to play around with.  Please keep in mind if you write plugins that
+the plugin architecture could change at any time, and probably will this early
+in development.
 
-A note about versions
----------------------
-This project uses a few Java 7 features. You should be able to import it and have the right settings (I hope), but make
-sure you have some kind of JDK 7. Tested on Linux against OpenJDK, Oracle's should work fine too.
+Requirements
+------------
+- JDK 7 (tested against OpenJDK)
+- Maven 3.x
+
+Installation & Running
+----------------------
+Clone the project, then:
+
+    mvn package
+    cd target/appassembler
+    mkdir data
+    cp conf/sample_config.properties conf/sample.properties
+    # Edit config/sample.properties with your favorite editor (vim)
+    ./bin/fmbot.sh
+
+This will change to a much easier system later when I get around to
+implementing it.
 
 License
 -------
@@ -20,10 +36,16 @@ See the LICENSE file for details. It's MIT.
 
 TODO
 ----
-- Migrate to a maven project
-- Catch exceptions thrown by plugins, so that no single plugin can crash the main thread
-- Documentation is badly needed
-- Refactor stuff out of Main so that it can tested by giving dummy inputs and outputs
+- Rewrite the Message class to handle things in a more RFC-conforming way
+- Catch exceptions thrown by plugins, so that no single plugin can crash the
+  main thread
+- Documentation and unit testing is badly needed
+- Refactor stuff out of Main so that it can tested by giving dummy inputs and
+  outputs
   - Write said tests
-- More plugins! A Java REPL plugin is planned, Software I and II students should appreciate this
-- Investigate letting users write plugins in other languages capable of running on the JVM (JRuby, Jython, Clojure, ...)
+- More plugins! A Java REPL plugin is planned, Software I and II students
+  should appreciate this
+- Investigate letting users write plugins in other languages capable of running
+  on the JVM (JRuby, Jython, Clojure, ...)
+- Somewhere along the way I decided a 120 char width was a good idea and now I
+  regret it. Everything needs to be changed back to 80.

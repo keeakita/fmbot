@@ -18,7 +18,9 @@ public class DiscordianDatePlugin extends Plugin {
     public void onPrivmsg(IRCSendificator sendificator, Message message) {
         if (message.getContent().startsWith("|ddate")) {
             try {
-                Process ddate = Runtime.getRuntime().exec("ddate");
+                Process ddate = Runtime.getRuntime().exec(new String[] {
+                        "ddate", "+Today is %A, the %e day of %B in the YOLD %Y. %.%N Have a Chaotic %H!"});
+
                 BufferedReader dIn = new BufferedReader(new InputStreamReader(ddate.getInputStream()));
                 String date = dIn.readLine();
                 dIn.close();

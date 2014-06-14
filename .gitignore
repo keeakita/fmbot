@@ -1,6 +1,2 @@
-bin/**
-.settings/
-.idea/workspace.xml
-.idea/tasks.xml
-data/config.properties
-data/fmusers.csv
+target/
+*.swp

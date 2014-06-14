@@ -17,12 +17,13 @@ public class Main {
      * Main function
      */
     public static void main(String[] args) {
+        ClassLoader loader = ClassLoader.getSystemClassLoader();
+
         // Read our config file
         try {
-            FileReader configFile = new FileReader("data/config.properties");
             config = new Properties();
-            config.load(configFile);
-        } catch (FileNotFoundException e) {
+            config.load(loader.getResourceAsStream("config.properties"));
+        } catch (NullPointerException e) {
             System.err.println("Config file not found, please see the README.");
             System.exit(404);
         } catch (IOException e) {
@@ -31,7 +32,6 @@ public class Main {
         }
 
         // Load plugins
-        ClassLoader loader = ClassLoader.getSystemClassLoader();
         String[] pluginNames = config.getProperty("plugins").split(",");
         // A map containing Plugin instances by name
         HashMap<String, Plugin> plugins = new HashMap<>();
@@ -117,8 +117,7 @@ public class Main {
                 // Handle the PING
                 if (line.indexOf("PING") == 0) {
                     sendificator.pong(line.split(" ")[1]);
-                } else {
-                    // TODO: Make sure it can be put in a message then onIRCMessage
+                } else if (Message.isIRCMessage(line)){
                     Message m = new Message(line);
 
                     // 443 means we can't use this nick, attempt to fall back

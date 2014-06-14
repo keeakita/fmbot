@@ -1,14 +1,17 @@
 package org.librewulf.fmbot.plugins.fm;
 
+import org.apache.http.HttpStatus;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.librewulf.fmbot.IRCSendificator;
 import org.librewulf.fmbot.Message;
 import org.librewulf.fmbot.plugins.Plugin;
 import org.w3c.dom.Document;
-import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
@@ -198,25 +201,17 @@ public class FMPlugin extends Plugin {
 
                     // Fetch data from the API
                     try {
-                        DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-                        Document doc = builder.parse(urlString);
+                        Document doc = fetchDocument(urlString);
 
-                        XPathFactory xpathFactory = XPathFactory.newInstance();
-                        XPath xpath = xpathFactory.newXPath();
+                        if (doc != null) {
+                            XPathFactory xpathFactory = XPathFactory.newInstance();
+                            XPath xpath = xpathFactory.newXPath();
 
-                        title = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/name", doc);
-                        mbid = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/mbid", doc);
-                        artist = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/artist", doc);
-                        album = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/album", doc);
-                    } catch (IOException eIO) {
-                        // It's probably temporary and there's not much we can do, so just warn the user and move on.
-                        System.err.println("Error: IOException while polling " + urlString + " :" + eIO.getMessage());
-                    } catch (ParserConfigurationException e) {
-                        // Invalid data from server
-                        System.err.println("Error: Got invalid XML from server: " + e.getMessage());
-                    } catch (SAXException e) {
-                        // I don't have a clue what could cause this
-                        System.err.println("Error: Unknown SAX error :" + e.getMessage());
+                            title = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/name", doc);
+                            mbid = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/mbid", doc);
+                            artist = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/artist", doc);
+                            album = xpath.evaluate("/lfm/recenttracks/track[@nowplaying='true']/album", doc);
+                        }
                     } catch (XPathExpressionException e) {
                         // XPath expression was malformed. This should never occur, since our XPath is hardcoded in
                         System.err.println("Error: XPath expression threw an error: " + e.getMessage());
@@ -383,5 +378,35 @@ public class FMPlugin extends Plugin {
     @Override
     public void onEnable() {
         loadFromFile();
+    }
+
+    /**
+     * Fetches the document, taking care of redirects.
+     * @param uri
+     */
+    private Document fetchDocument(String uri) {
+        CloseableHttpClient httpclient = HttpClients.createDefault();
+        HttpGet httpget = new HttpGet(uri);
+        CloseableHttpResponse response = null;
+
+        try {
+            response = httpclient.execute(httpget);
+            if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
+                DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+                Document doc = builder.parse(response.getEntity().getContent());
+                return doc;
+            } else {
+                System.err.println("Error: Not OK trying to fetch " + uri + ": " + response.getStatusLine());
+            }
+        } catch (Exception e) {
+            System.err.println("Error: Got Exception trying to fetch " + uri + ": " + e.getMessage());
+        } finally {
+            // Close it if it needs to be
+            try {
+                response.close();
+            } catch (Exception e) {}
+        }
+
+        return null;
     }
 }
