@@ -23,8 +23,9 @@ Clone the project, then:
     mvn package
     cd target/appassembler
     mkdir data
-    cp conf/sample_config.properties conf/sample.properties
+    cp conf/sample_config.properties conf/config.properties
     # Edit config/sample.properties with your favorite editor (vim)
+    chmod +x ./bin/fmbot.sh
     ./bin/fmbot.sh
 
 This will change to a much easier system later when I get around to
