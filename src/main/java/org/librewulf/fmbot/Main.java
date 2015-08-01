@@ -57,9 +57,11 @@ public class Main {
             p.initState(state);
         }
 
+        String[] ignoreNicks = new String[0];
         // Load ignored nicks string into array
-        String[] ignoreNicks = config.getProperty("ignore").split(",");
-
+        if (config.containsKey("ignore")) {
+            ignoreNicks = config.getProperty("ignore").split(",");
+        }
 
         // All plugins have been loaded, run the initialize methods and start threads
         for (Plugin p : plugins.values()) {
@@ -145,7 +147,7 @@ public class Main {
 
                         // Set modes, if specified
                         if (config.containsKey("modes")) {
-                            sendificator.queueCommand("mode", config.getProperty("modes"));
+                            sendificator.queueCommand("mode", state.getNick(), config.getProperty("modes"));
                         }
 
                         String[] channels = config.getProperty("channels").split(",");
@@ -181,8 +183,14 @@ public class Main {
                         }
                     } else if (m.getCommand().equals("JOIN")) {
                         // Was it the bot that joined?
+                        System.out.println(m.getSource());
                         if (m.getSource().split("!")[0].equals(state.getNick())) {
-                            state.addChannel(m.getDestination());
+                            // Some servers use the "content" portion for the channel name
+                            if (!m.getDestination().equals("")) {
+                                state.addChannel(m.getDestination());
+                            } else {
+                                state.addChannel(m.getContent());
+                            }
                         }
 
                         for (Plugin p : plugins.values()) {
