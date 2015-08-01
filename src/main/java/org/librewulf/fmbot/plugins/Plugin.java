@@ -91,7 +91,7 @@ public abstract class Plugin implements Runnable {
      * @return true if thread is known to be stopped, false otherwise
      */
     private boolean stopThread() {
-        if (this.threadInstance.isAlive()) {
+        if (this.threadInstance != null && this.threadInstance.isAlive()) {
             this.threadInstance.interrupt();
 
             // Figure out if our interrupt worked by trying to join()

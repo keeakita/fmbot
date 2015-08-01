@@ -143,6 +143,11 @@ public class Main {
                             sendificator.queuePrivmsg("NickServ", "identify " + config.getProperty("nickserv_pass"));
                         }
 
+                        // Set modes, if specified
+                        if (config.containsKey("modes")) {
+                            sendificator.queueCommand("mode", config.getProperty("modes"));
+                        }
+
                         String[] channels = config.getProperty("channels").split(",");
                         for (String channel : channels) {
                             sendificator.queueCommand("JOIN", channel);
