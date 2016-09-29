@@ -45,6 +45,12 @@
       <version>3.3.2</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.codehaus.mojo</groupId>
+      <artifactId>exec-maven-plugin</artifactId>
+      <version>1.5.0</version>
+    </dependency>
+
   </dependencies>
 
   <build>
@@ -87,6 +93,18 @@
             </goals>
           </execution>
         </executions>
+
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.5.0</version>
+
+        <configuration>
+          <workingDirectory>target/appassembler/</workingDirectory>
+          <executable>bin/fmbot.sh</executable>
+        </configuration>
 
       </plugin>
 
