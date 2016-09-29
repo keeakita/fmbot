@@ -17,7 +17,7 @@ public class AdminPlugin extends Plugin {
 
     private boolean verifyFromAdmin(Message m, IRCSendificator sendificator) {
         boolean isAdmin = false;
-        String user = m.getSource().split("!")[0];
+        String user = m.getPrefix().split("!")[0];
         String[] admins = state.getConfig().getProperty("admins").split(",");
 
         for (String admin : admins) {
@@ -65,7 +65,7 @@ public class AdminPlugin extends Plugin {
         } else if (message.getContent().startsWith("|state")) {
             if (verifyFromAdmin(message, sendificator)) {
                 reply(message, sendificator, "Dumping state, check your private messages.");
-                String user = message.getSource().split("!")[0];
+                String user = message.getPrefix().split("!")[0];
                 sendificator.queuePrivmsg(user, "Connected: " + state.isConnected());
                 sendificator.queuePrivmsg(user, "Nick: " + state.getNick());
 

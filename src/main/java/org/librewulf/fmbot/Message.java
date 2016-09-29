@@ -1,36 +1,35 @@
 package org.librewulf.fmbot;
 
 //FIXME: This should be renamed to "Reply" or "ServerReply"
-//FIXME: Rewrite this whole thing to have knowledge of specifc commands and use
 //a variable list of arguments
+
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 /**
  * A class representing a reply or message coming from an IRC server to the bot.
  */
 public class Message {
 
     /**
-     * The source of the message, usually the server or a user. Technically,
+     * The prefix of the message, usually the server or a user. Technically,
      * according to the RFC, this is optional, but it is present on almost
      * every modern IRC server.
      */
-    private String source = "";
+    private String prefix = "";
 
     // The command (numeric or otherwise), such as 376 or PRIVMSG.
     private String command = "";
 
     /**
-     * The destination of the message, usually a user or channel. Note that
-     * this may not exist for some messages like QUITs. Technically this is
-     * actually considered just a parameter for the command above according to
-     * the RFC, but it is almost always a destination.
+     * A list of parameters associated with the command. Per the RFC,
+     * parameters can't contain spaces except for the very last one.
      */
-    private String destination = "";
-
-    /*
-     * The content of the message. This also may not exist for some messages.
-     * Like above, it is technically the second argument to the command.
-     */
-    private String content = "";
+    private List<String> parameters = new ArrayList<>();
 
     /**
      * Default constructor.
@@ -48,44 +47,47 @@ public class Message {
         String trimmed = rawmsg.trim();
 
         String[] tmparr = trimmed.split(" ");
-        this.source = tmparr[0].substring(1); //Remove the leading ":"
-        this.command = tmparr[1];
+        int iterator = 0;
 
-        /* Here is where we need to determine if destination or content exist.
-         * If the third feild of the line begins with a ";", we can assume what
-         * follows is a message which may contain whitespace. If not, then it's
-         * a normal parameter (usually destination, see comment in destination
-         * declaration above).
-         */
-        if (tmparr[2].charAt(0) == ':') {
-            this.content = tmparr[2].substring(1); // Remove the leading ":"
-            for (int x = 3; x < tmparr.length; x++) {
-                this.content += " " + tmparr[x];
+        if (tmparr[iterator].startsWith(":")) {
+            this.prefix = tmparr[iterator].substring(1); // Remove the leading ":"
+            iterator++;
+        }
+
+        this.command = tmparr[iterator];
+        iterator++;
+
+        // Collect parameters
+        StringBuilder lastParam = new StringBuilder();
+        boolean isLastParam = false;
+        while (iterator < tmparr.length) {
+            // Concatenate the final parameter into one string
+            if (! isLastParam && tmparr[iterator].startsWith(":")) {
+                isLastParam = true;
+
+                // Strip leading ":"
+                lastParam.append(tmparr[iterator].substring(1));
+            } else if (isLastParam) {
+                lastParam.append(" " + tmparr[iterator]);
+            } else {
+                this.parameters.add(tmparr[iterator]);
             }
-        } else {
-            this.destination = tmparr[2];
 
-            // tmparr[3] may not exist, in which case content will be empty
-            if (tmparr.length > 3) {
-                // Remove leading ":"
-                if (tmparr[3].charAt(0) == ':') {
-                    this.content = tmparr[3].substring(1);
-                } else {
-                    this.content = tmparr[3];
-                }
+            iterator++;
+        }
 
-                for (int x = 4; x < tmparr.length; x++) {
-                    this.content += " " + tmparr[x];
-                }
-            }
+        // Add the special final parameter, if there was one
+        String lastParamStr = lastParam.toString();
+        if (lastParamStr.length() > 0) {
+            this.parameters.add(lastParamStr);
         }
     }
 
     /**
-     * @return the source
+     * @return the prefix
      */
-    public String getSource() {
-        return source;
+    public String getPrefix() {
+        return prefix;
     }
 
     /**
@@ -96,17 +98,42 @@ public class Message {
     }
 
     /**
+     * The "destination" of the message, usually a user or channel. Note that
+     * this may not exist for some messages like QUITs.
+     *
+     * Specifically, this returns the first parameter, unless that parameter
+     * contains whitespace. See deprecation notice.
+     *
      * @return the destination
+     * @deprecated This uses a flawed and inaccurate model of IRC messages.
+     * Instead, reference parameters by position.
      */
     public String getDestination() {
-        return destination;
+        String dest = parameters.get(0);
+
+        if (dest.contains(" ")) {
+            return "";
+        }
+
+        return dest;
     }
 
     /**
-     * @return the content
+     * Get the "content" of the message. This is a space separated concatenation
+     * of all parameters except the first.
+     *
+     * @return the last parameter of the message.
+     * @deprecated This uses a flawed and inaccurate model of IRC messages.
+     * Instead, reference parameters by position.
      */
     public String getContent() {
-        return content;
+        if (parameters.size() > 1) {
+            Iterator<String> iterator = parameters.iterator();
+            iterator.next();
+            return StringUtils.join(iterator, " ");
+        }
+
+        return "";
     }
 
     /**

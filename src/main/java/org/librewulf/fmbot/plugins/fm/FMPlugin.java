@@ -302,7 +302,7 @@ public class FMPlugin extends Plugin {
             if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
                     FMUser.domainRegex) && message.getDestination().startsWith("#")) {
 
-                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0],
+                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getPrefix().split("!")[0],
                         message.getDestination());
 
                 if (!users.contains(user)) {
@@ -321,7 +321,7 @@ public class FMPlugin extends Plugin {
 
                 // Make sure the bot is in a channel before letting somebody register with it
                 if (state.inChannel(cmdArr[3])) {
-                    FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0], cmdArr[3]);
+                    FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getPrefix().split("!")[0], cmdArr[3]);
 
                     if (!users.contains(user)) {
                         this.add(user);
@@ -345,7 +345,7 @@ public class FMPlugin extends Plugin {
             if (cmdArr.length == 3 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
                     FMUser.domainRegex) && message.getDestination().startsWith("#")) {
 
-                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0],
+                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getPrefix().split("!")[0],
                         message.getDestination());
 
                 if (users.contains(user)) {
@@ -360,7 +360,7 @@ public class FMPlugin extends Plugin {
             } else if (cmdArr.length == 4 && cmdArr[1].matches(FMUser.userRegex) && cmdArr[2].matches(
                     FMUser.domainRegex) && cmdArr[3].startsWith("#")) {
 
-                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getSource().split("!")[0], cmdArr[3]);
+                FMUser user = new FMUser(cmdArr[1], cmdArr[2], message.getPrefix().split("!")[0], cmdArr[3]);
 
                 if (this.users.contains(user)) {
                     this.remove(user);

@@ -164,7 +164,7 @@ public class Main {
                         }
                     } else if (m.getCommand().equals("PRIVMSG")) {
                         // Should we ignore this request?
-                        String senderNick = m.getSource().split("!")[0];
+                        String senderNick = m.getPrefix().split("!")[0];
 
                         boolean ignore = false;
                         for (String nick : ignoreNicks) {
@@ -183,8 +183,8 @@ public class Main {
                         }
                     } else if (m.getCommand().equals("JOIN")) {
                         // Was it the bot that joined?
-                        System.out.println(m.getSource());
-                        if (m.getSource().split("!")[0].equals(state.getNick())) {
+                        System.out.println(m.getPrefix());
+                        if (m.getPrefix().split("!")[0].equals(state.getNick())) {
                             // Some servers use the "content" portion for the channel name
                             if (!m.getDestination().equals("")) {
                                 state.addChannel(m.getDestination());
@@ -198,7 +198,7 @@ public class Main {
                         }
                     } else if (m.getCommand().equals("PART")) {
                         // Was it the bot that left?
-                        if (m.getSource().split("!")[0].equals(state.getNick())) {
+                        if (m.getPrefix().split("!")[0].equals(state.getNick())) {
                             state.removeChannel(m.getDestination());
                         }
 
@@ -207,7 +207,7 @@ public class Main {
                         }
                     } else if ( m.getCommand().equals("QUIT")) {
                         // Was it the bot that quit?
-                        if (m.getSource().split("!")[0].equals(state.getNick())) {
+                        if (m.getPrefix().split("!")[0].equals(state.getNick())) {
                             state.setConnected(false);
                             // We're disconnected, disable our plugins so they have a chance to clean up
                             for (Plugin p : plugins.values()) {

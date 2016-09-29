@@ -26,13 +26,13 @@ public abstract class Plugin implements Runnable {
      */
 
     public static void reply(Message source, IRCSendificator sendificator, String reply) {
-        String nick =  source.getSource().split("!")[0];
+        String nick =  source.getPrefix().split("!")[0];
         if (source.getDestination().startsWith("#")) {
             // It's a channel
             sendificator.queuePrivmsg(source.getDestination(), nick + ": " + reply);
         } else {
             // It's a user
-            String user = source.getSource().split("!")[0];
+            String user = source.getPrefix().split("!")[0];
             sendificator.queuePrivmsg(user, nick + ": " + reply);
         }
     }

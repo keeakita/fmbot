@@ -3,7 +3,6 @@ package org.librewulf.fmbot;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
-import org.librewulf.fmbot.Message;
 
 public class MessageTest {
 
@@ -13,7 +12,7 @@ public class MessageTest {
         Message m = new Message(":leguin.freenode.net NOTICE * " +
                 ":*** Looking up your hostname...\r\n");
 
-        assertEquals("leguin.freenode.net", m.getSource());
+        assertEquals("leguin.freenode.net", m.getPrefix());
         assertEquals("NOTICE", m.getCommand());
         assertEquals("*", m.getDestination());
         assertEquals("*** Looking up your hostname...", m.getContent());
@@ -32,13 +31,13 @@ public class MessageTest {
                 "NETWORK=freenode KNOCK STATUSMSG=@+ CALLERID=g :are " +
                 "supported by this server\r\n");
 
-        assertEquals("leguin.freenode.net", m.getSource());
+        assertEquals("leguin.freenode.net", m.getPrefix());
         assertEquals("005", m.getCommand());
         assertEquals("lwbot", m.getDestination());
         assertEquals("CHANTYPES=# " +
                 "EXCEPTS INVEX CHANMODES=eIbq,k,flj,CFLMPQScgimnprstz " +
                 "CHANLIMIT=#:120 PREFIX=(ov)@+ MAXLIST=bqeI:100 MODES=4 " +
-                "NETWORK=freenode KNOCK STATUSMSG=@+ CALLERID=g :are " +
+                "NETWORK=freenode KNOCK STATUSMSG=@+ CALLERID=g are " +
                 "supported by this server", m.getContent());
     }
 
@@ -51,7 +50,7 @@ public class MessageTest {
     public void testConstructorENDOFMOTD() {
         Message m = new Message(":leguin.freenode.net 376 lwbot :End of " +
                 "/MOTD command.\r\n");
-        assertEquals("leguin.freenode.net", m.getSource());
+        assertEquals("leguin.freenode.net", m.getPrefix());
         assertEquals("376", m.getCommand());
         assertEquals("lwbot", m.getDestination());
         assertEquals("End of /MOTD command.", m.getContent());
@@ -65,7 +64,7 @@ public class MessageTest {
     @Test
     public void testConstructorMODE() {
         Message m = new Message(":lwbot MODE lwbot :+i\r\n");
-        assertEquals("lwbot", m.getSource());
+        assertEquals("lwbot", m.getPrefix());
         assertEquals("MODE", m.getCommand());
         assertEquals("lwbot", m.getDestination());
         assertEquals("+i", m.getContent());
@@ -82,7 +81,7 @@ public class MessageTest {
             "#osuosc\r\n");
 
         assertEquals("lwbot!~lwbot@d118-75-29-164.try.wideopenwest.com",
-                m.getSource());
+                m.getPrefix());
         assertEquals("JOIN", m.getCommand());
         assertEquals("#osuosc", m.getDestination());
         assertEquals("", m.getContent());
@@ -99,7 +98,7 @@ public class MessageTest {
             ":Wil Wheaton is a mortal enemy!!\r\n");
 
         assertEquals("bsilvereagle!~bsilverea@osuosc/bsilvereagle",
-                m.getSource());
+                m.getPrefix());
         assertEquals("PRIVMSG", m.getCommand());
         assertEquals("#osuosc", m.getDestination());
         assertEquals("Wil Wheaton is a mortal enemy!!", m.getContent());
